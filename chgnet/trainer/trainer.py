@@ -38,6 +38,7 @@ class Trainer:
         force_loss_ratio: float = 1,
         stress_loss_ratio: float = 0.1,
         mag_loss_ratio: float = 0.1,
+        contrastive_loss_ratio: float = 0.1,
         optimizer: str = "Adam",
         scheduler: str = "CosLR",
         criterion: str = "MSE",
@@ -54,7 +55,7 @@ class Trainer:
 
         Args:
             model (nn.Module): a CHGNet model
-            targets ("ef" | "efs" | "efsm"): The training targets. Default = "ef"
+            targets ("ef" | "efs" | "efsm" | "efsmc"): The training targets. Default = "ef"
             energy_loss_ratio (float): energy loss ratio in loss function
                 Default = 1
             force_loss_ratio (float): force loss ratio in loss function
@@ -174,6 +175,7 @@ class Trainer:
             force_loss_ratio=force_loss_ratio,
             stress_loss_ratio=stress_loss_ratio,
             mag_loss_ratio=mag_loss_ratio,
+            contrastive_loss_ratio=contrastive_loss_ratio,
             **kwargs,
         )
         self.epochs = epochs
@@ -313,8 +315,13 @@ class Trainer:
             targets = {k: self.move_to(v, self.device) for k, v in targets.items()}
 
             # compute output
-            prediction = self.model(graphs, task=self.targets)
-            combined_loss = self.criterion(targets, prediction)
+            if "c" in self.targets:
+                prediction = self.model(graphs, task=self.targets, return_crystal_feas=True)
+                contrastive_prediction = self.model(graphs, task="e", return_crystal_feas=True)
+                combined_loss = self.criterion(targets, prediction, contrastive_prediction)
+            else:
+                prediction = self.model(graphs, task=self.targets)
+                combined_loss = self.criterion(targets, prediction)
 
             losses.update(combined_loss["loss"].data.cpu().item(), len(graphs))
             for key in self.targets:
@@ -397,8 +404,13 @@ class Trainer:
                     }
 
             # compute output
-            prediction = self.model(graphs, task=self.targets)
-            combined_loss = self.criterion(targets, prediction)
+            if "c" in self.targets:
+                prediction = self.model(graphs, task=self.targets, return_crystal_feas=True)
+                contrastive_prediction = self.model(graphs, task="e", return_crystal_feas=True)
+                combined_loss = self.criterion(targets, prediction, contrastive_prediction)
+            else:
+                prediction = self.model(graphs, task=self.targets)
+                combined_loss = self.criterion(targets, prediction)
 
             losses.update(combined_loss["loss"].data.cpu().item(), len(graphs))
             for key in self.targets:
@@ -582,7 +594,9 @@ class CombinedLoss(nn.Module):
         force_loss_ratio: float = 1,
         stress_loss_ratio: float = 0.1,
         mag_loss_ratio: float = 0.1,
+        contrastive_loss_ratio: float = 0.1,
         delta: float = 0.1,
+        tau: float = 0.05,
     ) -> None:
         """Initialize the combined loss.
 
@@ -601,7 +615,10 @@ class CombinedLoss(nn.Module):
                 Default = 0.1
             mag_loss_ratio (float): magmom loss ratio in loss function
                 Default = 0.1
+            contrastive_loss_ratio (float): contrastive loss ratio in loss function
+                Default = 0.1
             delta (float): delta for torch.nn.HuberLoss. Default = 0.1
+            tau (float): temperature for contrastive loss. Default = 0.05
         """
         super().__init__()
         # Define loss criterion
@@ -613,9 +630,11 @@ class CombinedLoss(nn.Module):
             self.criterion = nn.HuberLoss(delta=delta)
         else:
             raise NotImplementedError
+        self.contrastive_criterion = nn.CrossEntropyLoss()
         self.target_str = target_str
         self.is_intensive = is_intensive
         self.energy_loss_ratio = energy_loss_ratio
+        self.tau = tau
         if "f" not in self.target_str:
             self.force_loss_ratio = 0
         else:
@@ -628,11 +647,16 @@ class CombinedLoss(nn.Module):
             self.mag_loss_ratio = 0
         else:
             self.mag_loss_ratio = mag_loss_ratio
+        if "c" not in self.target_str:
+            self.contrastive_loss_ratio = 0
+        else:
+            self.contrastive_loss_ratio = contrastive_loss_ratio
 
     def forward(
         self,
         targets: dict[str, Tensor],
         prediction: dict[str, Tensor],
+        contrastive_prediction: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         """Compute the combined loss using CHGNet prediction and labels
         this function can automatically mask out magmom loss contribution of
@@ -641,6 +665,7 @@ class CombinedLoss(nn.Module):
         Args:
             targets (dict): DFT labels
             prediction (dict): CHGNet prediction
+            contrastive_prediction (dict, optional): CHGNet prediction for contrastive learning
 
         Returns:
             dictionary of all the loss, MAE and MAE_size
@@ -704,5 +729,18 @@ class CombinedLoss(nn.Module):
             else:
                 out["m_MAE"] = torch.zeros([1])
                 out["m_MAE_size"] = m_mae_size
+        
+        # Contrastive learning
+        if contrastive_prediction is not None:
+            crystal_fea = prediction["crystal_fea"] / (prediction["crystal_fea"].norm(dim=1, keepdim=True) + 1e-10)
+            contrastive_crystal_fea = contrastive_prediction["crystal_fea"] / (contrastive_prediction["crystal_fea"].norm(dim=1, keepdim=True) + 1e-10)
+
+            sim_matrix = torch.mm(crystal_fea, crystal_fea.t()) / self.tau
+            labels = torch.arange(sim_matrix.size(0)).to(sim_matrix.device)
+            contrastive_loss = self.contrastive_criterion(sim_matrix, labels)
+
+            out["loss"] += self.contrastive_loss_ratio * contrastive_loss
+            out["c_MAE"] = contrastive_loss
+            out["c_MAE_size"] = sim_matrix.shape[0]
 
         return out
