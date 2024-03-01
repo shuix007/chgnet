@@ -10,8 +10,9 @@ import numpy as np
 import torch
 from pymatgen.core.structure import Structure
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.distributed import DistributedSampler
 
 from chgnet import utils
 from chgnet.graph import CrystalGraph, CrystalGraphConverter
@@ -719,6 +720,7 @@ def get_train_val_test_loader(
     return_test: bool = True,
     num_workers: int = 0,
     pin_memory: bool = True,
+    seed: int = 0
 ):
     """Randomly partition a dataset into train, val, test loaders.
 
@@ -737,6 +739,8 @@ def get_train_val_test_loader(
             Default = 0
         pin_memory (bool): Whether to pin the memory of the data loaders
             Default: True
+        seed (int): Random seed for sampler
+            Default = 0
 
     Returns:
         train_loader, val_loader and optionally test_loader
@@ -747,35 +751,75 @@ def get_train_val_test_loader(
     train_size = int(train_ratio * total_size)
     val_size = int(val_ratio * total_size)
 
+    train_indices = indices[0:train_size]
+    val_indices = indices[train_size : train_size + val_size]
+    test_indices = indices[train_size + val_size :]
+
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+    test_dataset = Subset(dataset, test_indices)
+
+    train_sampler = DistributedSampler(train_dataset, shuffle=True, seed=seed, drop_last=True)
+    val_sampler = DistributedSampler(val_dataset, shuffle=False)
+    test_sampler = DistributedSampler(test_dataset, shuffle=False)
+
     train_loader = DataLoader(
-        dataset,
+        train_dataset,
         batch_size=batch_size,
         collate_fn=collate_graphs,
-        sampler=SubsetRandomSampler(indices=indices[0:train_size]),
+        sampler=train_sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
     )
     val_loader = DataLoader(
-        dataset,
+        val_dataset,
         batch_size=batch_size,
         collate_fn=collate_graphs,
-        sampler=SubsetRandomSampler(
-            indices=indices[train_size : train_size + val_size]
-        ),
+        sampler=val_sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
     )
     if return_test:
         test_loader = DataLoader(
-            dataset,
+            test_dataset,
             batch_size=batch_size,
             collate_fn=collate_graphs,
-            sampler=SubsetRandomSampler(indices=indices[train_size + val_size :]),
+            sampler=test_sampler,
             num_workers=num_workers,
             pin_memory=pin_memory,
         )
         return train_loader, val_loader, test_loader
     return train_loader, val_loader
+
+    # train_loader = DataLoader(
+    #     dataset,
+    #     batch_size=batch_size,
+    #     collate_fn=collate_graphs,
+    #     sampler=SubsetRandomSampler(indices=indices[0:train_size]),
+    #     num_workers=num_workers,
+    #     pin_memory=pin_memory,
+    # )
+    # val_loader = DataLoader(
+    #     dataset,
+    #     batch_size=batch_size,
+    #     collate_fn=collate_graphs,
+    #     sampler=SubsetRandomSampler(
+    #         indices=indices[train_size : train_size + val_size]
+    #     ),
+    #     num_workers=num_workers,
+    #     pin_memory=pin_memory,
+    # )
+    # if return_test:
+    #     test_loader = DataLoader(
+    #         dataset,
+    #         batch_size=batch_size,
+    #         collate_fn=collate_graphs,
+    #         sampler=SubsetRandomSampler(indices=indices[train_size + val_size :]),
+    #         num_workers=num_workers,
+    #         pin_memory=pin_memory,
+    #     )
+    #     return train_loader, val_loader, test_loader
+    # return train_loader, val_loader
 
 
 def get_loader(dataset, batch_size=64, num_workers=0, pin_memory=True):

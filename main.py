@@ -1,5 +1,7 @@
 import os
 import json
+import torch
+import random
 import argparse
 import numpy as np
 
@@ -7,6 +9,16 @@ from pymatgen.core import Structure
 from chgnet.trainer import Trainer
 from chgnet.model import CHGNet
 from chgnet.data.dataset import StructureData, get_train_val_test_loader
+from chgnet.utils import distutils
+
+def set_seed(seed):
+    # set all possible seed for random, numpy, torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def load_structures_from_json(
         json_filename='../FERMat/Data/MPtrj_2022.9_full.json',
@@ -52,8 +64,55 @@ def load_structures_from_json(
     )
     return train_loader, val_loader, test_loader
 
+def load_structures_from_json(
+        json_filename='../FERMat/Data/MPtrj_2022.9_full.json',
+        sample_filename='../FERMat/Data/SampledPretrain/MPtraj-semdedup/rseed0-0.10/colabfit_ids.txt'
+    ):
+    with open(json_filename, 'r') as f:
+        data = json.load(f)
+    
+    if sample_filename is not None:
+        with open(sample_filename, 'r') as f:
+            sample_ids = set(f.read().splitlines())
+    
+    structures = []
+    energies_per_atom = []
+    forces = []
+    stresses = []
+    magmoms = []
+
+    mp_ids = sorted(list(data.keys()))
+    for mp_id in mp_ids:
+        frame_ids = sorted(list(data[mp_id].keys())) # deterministic order
+        for frame_id in frame_ids:
+            if sample_filename is not None and frame_id not in sample_ids:
+                continue
+            frame = data[mp_id][frame_id]
+            
+            structures.append(Structure.from_dict(frame['structure']))
+            energies_per_atom.append(frame['energy_per_atom'])
+            forces.append(frame['force'])
+            stresses.append(frame['stress'])
+            magmoms.append(frame['magmom'])
+    print('Loaded', len(structures), 'structures')
+
+    dataset = StructureData(
+        structures=structures,
+        energies=energies_per_atom,
+        forces=forces,
+        stresses=stresses,  # can be None
+        magmoms=magmoms,  # can be None
+    )
+    return dataset
+
 def main(args):
-    train_loader, val_loader, test_loader = load_structures_from_json(
+    config = vars(args)
+    if args.distributed:
+        distutils.setup(config)
+
+    set_seed(args.seed)
+    local_rank = args.local_rank
+    dataset = load_structures_from_json(
         json_filename=args.json_filename,
         sample_filename=args.sample_filename
     )
@@ -86,7 +145,7 @@ def main(args):
         cutoff_coeff=8,
         learnable_rbf=True,
     )
-
+    
     trainer = Trainer(
         model=model,
         targets='efsmc',
@@ -100,20 +159,65 @@ def main(args):
         scheduler_params={'decay_fraction': 0.5e-2},
         criterion='Huber',
         delta=0.1,
-        epochs=30,
+        local_rank=local_rank,
+        epochs=5,
         starting_epoch=0,
         learning_rate=5e-3,
         use_device='cuda',
         print_freq=10
     )
-
-    trainer.train(train_loader, val_loader, test_loader)
+    trainer.load_datasets(
+        dataset,
+        batch_size=40, 
+        train_ratio=0.9, 
+        val_ratio=0.05,
+        pin_memory=False,
+        seed=args.seed
+    )
+    trainer.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--json_filename', type=str, default='../FERMat/Data/MPtrj_2022.9_full.json')
-    # set the default value of sample_filename to None
-    parser.add_argument('--sample_filename', type=str, default=None)
-    # parser.add_argument('--sample_filename', type=str, default='../FERMat/Data/SampledPretrain/MPtraj-semdedup/rseed0-0.10/colabfit_ids.txt')
+    parser.add_argument(
+        '--json_filename', 
+        type=str, 
+        default='data/sampled_MPtrj_2022.9_full.json'
+    )
+    parser.add_argument(
+        '--sample_filename', 
+        type=str, 
+        default=None
+    )
+    parser.add_argument(
+        "--local_rank", default=0, type=int, help="Local rank"
+    )
+    parser.add_argument(
+        "--no-ddp", action="store_true", help="Do not use DDP"
+    )
+    parser.add_argument(
+        "--distributed-port",
+        type=int,
+        default=13356,
+        help="Port on master for DDP",
+    )
+    parser.add_argument(
+        "--distributed-backend",
+        type=str,
+        default="nccl",
+        help="Backend for DDP",
+    )
+    parser.add_argument(
+        "--distributed", action="store_true", help="Run with DDP"
+    )
+    parser.add_argument(
+        "--submit", action="store_true", help="Submit job to cluster"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Port on master for DDP",
+    )
     args = parser.parse_args()
+
     main(args)

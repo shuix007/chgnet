@@ -17,15 +17,18 @@ from torch.optim.lr_scheduler import (
     ExponentialLR,
     MultiStepLR,
 )
+from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel.distributed import DistributedDataParallel
 
 from chgnet.model.model import CHGNet
-from chgnet.utils import AverageMeter, cuda_devices_sorted_by_free_mem, mae, write_json
+from chgnet.data.dataset import collate_graphs
+from chgnet.utils import AverageMeter, cuda_devices_sorted_by_free_mem, mae, write_json, distutils
 
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
     from chgnet import TrainTask
-
 
 class Trainer:
     """A trainer to train CHGNet using energy, force, stress and magmom."""
@@ -46,6 +49,7 @@ class Trainer:
         starting_epoch: int = 0,
         learning_rate: float = 1e-3,
         print_freq: int = 100,
+        local_rank: int = 0,
         torch_seed: int | None = None,
         data_seed: int | None = None,
         use_device: str | None = None,
@@ -77,6 +81,8 @@ class Trainer:
                 Default = 1e-3
             print_freq (int): frequency to print training output
                 Default = 100
+            local_rank (int): local rank to decide the idx of GPU 
+                Default = 0,
             torch_seed (int): random seed for torch
                 Default = None
             data_seed (int): random seed for random
@@ -94,13 +100,31 @@ class Trainer:
         }
         self.trainer_args.update(kwargs)
 
-        self.model = model
-        self.targets = targets
+        # Determine the device to use
+        if use_device is not None:
+            self.device = use_device
+        elif torch.cuda.is_available():
+            self.device = "cuda"
+        else:
+            self.device = "cpu"
+        if self.device == "cuda":
+            # Determine cuda device with most available memory
+            # device_with_most_available_memory = cuda_devices_sorted_by_free_mem()[-1]
+            # self.device = f"cuda:{device_with_most_available_memory}"
+            self.device = f"cuda:{local_rank}"
 
-        if torch_seed is not None:
-            torch.manual_seed(torch_seed)
-        if data_seed:
-            random.seed(data_seed)
+        self.model = model
+        self.model.to(self.device)
+
+        if distutils.initialized():
+            self.model = DistributedDataParallel(
+                self.model, device_ids=[self.device]
+            )
+        self.targets = targets
+        # if torch_seed is not None:
+        #     torch.manual_seed(torch_seed)
+        # if data_seed:
+        #     random.seed(data_seed)
 
         # Define optimizer
         if optimizer == "SGD":
@@ -181,28 +205,109 @@ class Trainer:
         self.epochs = epochs
         self.starting_epoch = starting_epoch
 
-        # Determine the device to use
-        if use_device is not None:
-            self.device = use_device
-        elif torch.cuda.is_available():
-            self.device = "cuda"
-        else:
-            self.device = "cpu"
-        if self.device == "cuda":
-            # Determine cuda device with most available memory
-            device_with_most_available_memory = cuda_devices_sorted_by_free_mem()[-1]
-            self.device = f"cuda:{device_with_most_available_memory}"
-
         self.print_freq = print_freq
         self.training_history: dict[
             str, dict[Literal["train", "val", "test"], list[float]]
         ] = {key: {"train": [], "val": [], "test": []} for key in self.targets}
         self.best_model = None
 
+    @property
+    def _unwrapped_model(self):
+        module = self.model
+        while isinstance(module, DistributedDataParallel):
+            module = module.module
+        return module
+
+    def load_datasets(
+        self, 
+        dataset: Dataset,
+        batch_size: int = 64,
+        train_ratio: float = 0.8,
+        val_ratio: float = 0.1,
+        return_test: bool = True,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        seed: int = 0
+    ):
+        """Randomly partition a dataset into train, val, test loaders.
+
+        Args:
+            dataset (Dataset): The dataset to partition.
+            batch_size (int): The batch size for the data loaders
+                Default = 64
+            train_ratio (float): The ratio of the dataset to use for training
+                Default = 0.8
+            val_ratio (float): The ratio of the dataset to use for validation
+                Default: 0.1
+            return_test (bool): Whether to return a test data loader
+                Default = True
+            num_workers (int): The number of worker processes for loading the data
+                see torch Dataloader documentation for more info
+                Default = 0
+            pin_memory (bool): Whether to pin the memory of the data loaders
+                Default: True
+            seed (int): Random seed for sampler
+                Default = 0
+
+        Returns:
+            train_loader, val_loader and optionally test_loader
+        """
+        total_size = len(dataset)
+        indices = list(range(total_size))
+        random.shuffle(indices)
+        train_size = int(train_ratio * total_size)
+        val_size = int(val_ratio * total_size)
+
+        train_indices = indices[0:train_size]
+        val_indices = indices[train_size : train_size + val_size]
+        test_indices = indices[train_size + val_size :]
+
+        self.train_dataset = Subset(dataset, train_indices)
+        self.val_dataset = Subset(dataset, val_indices)
+        self.test_dataset = Subset(dataset, test_indices)
+
+        num_replicas = distutils.get_world_size()
+        rank = distutils.get_rank()
+
+        self.train_sampler = DistributedSampler(
+            self.train_dataset, shuffle=True, seed=seed, drop_last=True, num_replicas=num_replicas, rank=rank)
+        self.val_sampler = DistributedSampler(
+            self.val_dataset, shuffle=False, num_replicas=num_replicas, rank=rank)
+        self.test_sampler = DistributedSampler(
+            self.test_dataset, shuffle=False, num_replicas=num_replicas, rank=rank)
+
+        self.train_loader = DataLoader(
+            self.train_dataset,
+            batch_size=batch_size,
+            collate_fn=collate_graphs,
+            sampler=self.train_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
+        self.val_loader = DataLoader(
+            self.val_dataset,
+            batch_size=batch_size,
+            collate_fn=collate_graphs,
+            sampler=self.val_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
+        if return_test:
+            self.test_loader = DataLoader(
+                self.test_dataset,
+                batch_size=batch_size,
+                collate_fn=collate_graphs,
+                sampler=self.test_sampler,
+                num_workers=num_workers,
+                pin_memory=pin_memory,
+            )
+        else:
+            self.test_loader = None
+
     def train(
         self,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: DataLoader | None = None,
+        val_loader: DataLoader | None = None,
         test_loader: DataLoader | None = None,
         save_dir: str | None = None,
         save_test_result: bool = False,
@@ -229,40 +334,47 @@ class Trainer:
         if self.model is None:
             raise ValueError("Model needs to be initialized")
         global best_checkpoint  # noqa: PLW0603
-        if save_dir is None:
-            save_dir = f"{datetime.now():%m-%d-%Y}"
-        os.makedirs(save_dir, exist_ok=True)
-
+        if distutils.is_master():
+            if save_dir is None:
+                save_dir = f"{datetime.now():%Y-%m-%d-%H-%m-%S}"
+            os.makedirs(save_dir, exist_ok=True)
+            print(f"training targets: {self.targets}")
         print(f"Begin Training: using {self.device} device")
-        print(f"training targets: {self.targets}")
-        self.model.to(self.device)
+        # self.model.to(self.device)
 
         # Turn composition model training on / off
-        for param in self.model.composition_model.parameters():
+        # for param in self.model.composition_model.parameters():
+        #     param.requires_grad = train_composition_model
+        for param in self._unwrapped_model.composition_model.parameters():
             param.requires_grad = train_composition_model
 
         for epoch in range(self.starting_epoch, self.epochs):
+            self.train_sampler.set_epoch(epoch)
             # train
-            train_mae = self._train(train_loader, epoch)
+            train_mae = self._train(self.train_loader, epoch)
             if "e" in train_mae and train_mae["e"] != train_mae["e"]:
-                print("Exit due to NaN")
+                if distutils.is_master():
+                    print("Exit due to NaN")
                 break
 
             # val
-            val_mae = self._validate(val_loader)
+            val_mae = self._validate(self.val_loader)
             for key in self.targets:
                 self.training_history[key]["train"].append(train_mae[key])
                 self.training_history[key]["val"].append(val_mae[key])
 
             if "e" in val_mae and val_mae["e"] != val_mae["e"]:
-                print("Exit due to NaN")
+                if distutils.is_master():
+                    print("Exit due to NaN")
                 break
+            
+            if distutils.is_master():
+                self.save_checkpoint(epoch, val_mae, save_dir=save_dir)
 
-            self.save_checkpoint(epoch, val_mae, save_dir=save_dir)
-
-        if test_loader is not None:
+        if self.test_loader is not None:
             # test best model
-            print("---------Evaluate Model on Test Set---------------")
+            if distutils.is_master():
+                print("---------Evaluate Model on Test Set---------------")
             for file in os.listdir(save_dir):
                 if file.startswith("bestE_"):
                     test_file = file
@@ -271,16 +383,17 @@ class Trainer:
             self.model.load_state_dict(best_checkpoint["model"]["state_dict"])
             if save_test_result:
                 test_mae = self._validate(
-                    test_loader, is_test=True, test_result_save_path=save_dir
+                    self.test_loader, is_test=True, test_result_save_path=save_dir
                 )
             else:
                 test_mae = self._validate(
-                    test_loader, is_test=True, test_result_save_path=None
+                    self.test_loader, is_test=True, test_result_save_path=None
                 )
 
             for key in self.targets:
                 self.training_history[key]["test"] = test_mae[key]
-            self.save(filename=os.path.join(save_dir, test_file))
+            if distutils.is_master():
+                self.save(filename=os.path.join(save_dir, test_file))
 
     def _train(self, train_loader: DataLoader, current_epoch: int) -> dict:
         """Train all data for one epoch.
@@ -357,7 +470,8 @@ class Trainer:
                     message += (
                         f"{key} {mae_errors[key].val:.3f}({mae_errors[key].avg:.3f})  "
                     )
-                print(message)
+                if distutils.is_master():
+                    print(message)
         return {key: round(err.avg, 6) for key, err in mae_errors.items()}
 
     def _validate(
@@ -468,19 +582,26 @@ class Trainer:
                     message += (
                         f"{key} {mae_errors[key].val:.3f}({mae_errors[key].avg:.3f})  "
                     )
-                print(message)
+                if distutils.is_master():
+                    print(message)
 
         if is_test:
             message = "**  "
             if test_result_save_path:
-                write_json(
-                    test_pred, os.path.join(test_result_save_path, "test_result.json")
-                )
+                if distutils.initialized():
+                    write_json(
+                        test_pred, os.path.join(test_result_save_path, "test_result_{}.json".format(distutils.get_rank()))
+                    )
+                else:
+                    write_json(
+                        test_pred, os.path.join(test_result_save_path, "test_result.json".format(distutils.get_rank()))
+                    )
         else:
             message = "*   "
         for key in self.targets:
             message += f"{key}_MAE ({mae_errors[key].avg:.3f}) \t"
-        print(message)
+        if distutils.is_master():
+            print(message)
         return {k: round(mae_error.avg, 6) for k, mae_error in mae_errors.items()}
 
     def get_best_model(self) -> CHGNet:
@@ -488,7 +609,8 @@ class Trainer:
         if self.best_model is None:
             raise RuntimeError("the model needs to be trained first")
         MAE = min(self.training_history["e"]["val"])
-        print(f"Best model has val {MAE =:.4}")
+        if distutils.is_master():
+            print(f"Best model has val {MAE =:.4}")
         return self.best_model
 
     @property
@@ -502,7 +624,8 @@ class Trainer:
     def save(self, filename: str = "training_result.pth.tar") -> None:
         """Save the model, graph_converter, etc."""
         state = {
-            "model": self.model.as_dict(),
+            # "model": self.model.as_dict(),
+            "model": self._unwrapped_model.as_dict(),
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
             "training_history": self.training_history,
@@ -677,7 +800,7 @@ class CombinedLoss(nn.Module):
                 out["loss"] += self.energy_loss_ratio * self.criterion(
                     targets["e"], prediction["e"]
                 )
-                out["e_MAE"] = mae(targets["e"], prediction["e"])
+                out["e_MAE"] = mae(targets["e"], prediction["e"]) * prediction["e"].shape[0]
                 out["e_MAE_size"] = prediction["e"].shape[0]
             else:
                 e_per_atom_target = targets["e"] / prediction["atoms_per_graph"]
@@ -685,7 +808,7 @@ class CombinedLoss(nn.Module):
                 out["loss"] += self.energy_loss_ratio * self.criterion(
                     e_per_atom_target, e_per_atom_pred
                 )
-                out["e_MAE"] = mae(e_per_atom_target, e_per_atom_pred)
+                out["e_MAE"] = mae(e_per_atom_target, e_per_atom_pred) * prediction["e"].shape[0]
                 out["e_MAE_size"] = prediction["e"].shape[0]
 
         # Force
@@ -695,7 +818,7 @@ class CombinedLoss(nn.Module):
             out["loss"] += self.force_loss_ratio * self.criterion(
                 forces_target, forces_pred
             )
-            out["f_MAE"] = mae(forces_target, forces_pred)
+            out["f_MAE"] = mae(forces_target, forces_pred) * forces_target.shape[0]
             out["f_MAE_size"] = forces_target.shape[0]
 
         # Stress
@@ -705,7 +828,7 @@ class CombinedLoss(nn.Module):
             out["loss"] += self.stress_loss_ratio * self.criterion(
                 stress_target, stress_pred
             )
-            out["s_MAE"] = mae(stress_target, stress_pred)
+            out["s_MAE"] = mae(stress_target, stress_pred) * stress_target.shape[0]
             out["s_MAE_size"] = stress_target.shape[0]
 
         # Mag
@@ -724,23 +847,41 @@ class CombinedLoss(nn.Module):
                 out["loss"] += self.mag_loss_ratio * self.criterion(
                     mag_targets, mag_preds
                 )
-                out["m_MAE"] = mae(mag_targets, mag_preds)
+                out["m_MAE"] = mae(mag_targets, mag_preds) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
             else:
-                out["m_MAE"] = torch.zeros([1])
+                out["m_MAE"] = torch.zeros([1]) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
+        
+        for key in out:
+            if key not in ["loss"]:
+                out[key] = distutils.all_reduce(
+                    out[key], average=False, device=prediction["e"].device
+                )
+        
+        for key in targets:
+            if key != 'c':
+                out["{}_MAE".format(key)] /= out["{}_MAE_size".format(key)]
         
         # Contrastive learning
         if contrastive_prediction is not None:
-            crystal_fea = prediction["crystal_fea"] / (prediction["crystal_fea"].norm(dim=1, keepdim=True) + 1e-10)
-            contrastive_crystal_fea = contrastive_prediction["crystal_fea"] / (contrastive_prediction["crystal_fea"].norm(dim=1, keepdim=True) + 1e-10)
+            crystal_fea = prediction["crystal_fea"] / prediction["crystal_fea"].norm(dim=1, keepdim=True)
+            contrastive_crystal_fea = contrastive_prediction["crystal_fea"] / contrastive_prediction["crystal_fea"].norm(dim=1, keepdim=True)
 
-            sim_matrix = torch.mm(crystal_fea, crystal_fea.t()) / self.tau
+            full_crystal_fea = torch.stack([crystal_fea, contrastive_crystal_fea], dim=1) # B * 2 * D
+            full_crystal_fea_aggregated = distutils.all_gather(full_crystal_fea)
+
+            full_crystal_fea = torch.cat(full_crystal_fea_aggregated, dim=0) # N * 2 * D
+            
+            crystal_fea = full_crystal_fea[:, 0, :]
+            contrastive_crystal_fea = full_crystal_fea[:, 1, :]
+
+            sim_matrix = torch.mm(crystal_fea, contrastive_crystal_fea.t()) / self.tau
             labels = torch.arange(sim_matrix.size(0)).to(sim_matrix.device)
             contrastive_loss = self.contrastive_criterion(sim_matrix, labels)
 
             out["loss"] += self.contrastive_loss_ratio * contrastive_loss
-            out["c_MAE"] = contrastive_loss
+            out["c_MAE"] = contrastive_loss * sim_matrix.shape[0]
             out["c_MAE_size"] = sim_matrix.shape[0]
 
         return out
