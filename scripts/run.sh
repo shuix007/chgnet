@@ -41,4 +41,4 @@ echo $SLURM_JOB_ID
 #             --rdzv_backend=c10d \
 #             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 #             main.py --submit --distributed --num-nodes 2 --num-gpus 4
-srun main.py --submit --distributed --num-nodes 2 --num-gpus 4
+srun python main.py --submit --distributed --num-nodes 2 --num-gpus 4
