@@ -80,6 +80,11 @@ def setup(config) -> None:
                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
                 )
 
+                print(
+                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
+                )
+                print(config["local_rank"], config["rank"])
+
                 # ensures GPU0 does not have extra context/higher peak memory
                 torch.cuda.set_device(config["local_rank"])
 

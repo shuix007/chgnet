@@ -37,6 +37,6 @@ echo $SLURM_JOB_ID
 srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
             --nnodes=$SLURM_NNODES \
             --rdzv_id=$SLURM_JOB_ID \
-            --rdzv_backend=static \
+            --rdzv_backend=c10d \
             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
             main.py --submit --distributed --num-nodes 2 --num-gpus 4
