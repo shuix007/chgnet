@@ -43,6 +43,7 @@ def setup(config) -> None:
         node_list = os.environ.get("SLURM_STEP_NODELIST")
         if node_list is None:
             node_list = os.environ.get("SLURM_JOB_NODELIST")
+        print("0", os.environ.get("SLURM_JOB_NODELIST"), os.environ.get("SLURM_STEP_NODELIST"))
         if node_list is not None:
             try:
                 hostnames = subprocess.check_output(
@@ -54,6 +55,7 @@ def setup(config) -> None:
                 )
                 nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
                 ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
+                print("1", os_environ_get_or_throw("SLURM_NNODES"), os.environ.get("SLURM_NTASKS_PER_NODE"))
                 if ntasks_per_node is not None:
                     ntasks_per_node = int(ntasks_per_node)
                 else:
@@ -75,6 +77,8 @@ def setup(config) -> None:
                     config["local_rank"] = int(
                         os_environ_get_or_throw("SLURM_LOCALID")
                     )
+                    print("2", os_environ_get_or_throw("SLURM_PROCID"), os_environ_get_or_throw("SLURM_LOCALID"))
+
 
                 logging.info(
                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
