@@ -2,6 +2,7 @@
 #SBATCH --job-name=pytorch_ddp       # Job name
 #SBATCH -p gk
 #SBATCH --nodes=2                    # Number of nodes
+#SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=4          # How many tasks on each node
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
 #SBATCH --time=01:00:00              # Time limit hrs:min:sec
@@ -26,11 +27,16 @@ export MASTER_PORT=13356
 # srun python -m torch.distributed.launch --nproc_per_node=$SLURM_NTASKS_PER_NODE --nnodes=$SLURM_NNODES --node_rank=$SLURM_PROCID --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT your_training_script.py
 
 echo $MASTER_ADDR:$MASTER_PORT
+echo $SLURM_NTASKS_PER_NODE
+echo $SLURM_NNODES
+echo $WORLD_SIZE
+echo $SLURM_JOB_ID
+
 
 # If using PyTorch 1.9 or newer, you can also use torchrun (which replaces torch.distributed.launch)
 srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
             --nnodes=$SLURM_NNODES \
             --rdzv_id=$SLURM_JOB_ID \
-            --rdzv_backend=c10d \
+            --rdzv_backend=static \
             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
             main.py --submit --distributed --num-nodes 2 --num-gpus 4
