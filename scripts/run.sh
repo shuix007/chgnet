@@ -25,6 +25,8 @@ export MASTER_PORT=13356
 # Run the PyTorch script using torch.distributed.launch or torchrun (for PyTorch >= 1.9)
 # srun python -m torch.distributed.launch --nproc_per_node=$SLURM_NTASKS_PER_NODE --nnodes=$SLURM_NNODES --node_rank=$SLURM_PROCID --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT your_training_script.py
 
+echo $MASTER_ADDR:$MASTER_PORT
+
 # If using PyTorch 1.9 or newer, you can also use torchrun (which replaces torch.distributed.launch)
 srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
             --nnodes=$SLURM_NNODES \
