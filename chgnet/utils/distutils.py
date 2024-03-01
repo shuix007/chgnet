@@ -91,7 +91,7 @@ def setup(config) -> None:
                 )
 
                 print(
-                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
+                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}, {config['local_rank']}"
                 )
                 print(config["local_rank"], config["rank"])
 
