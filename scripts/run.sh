@@ -2,7 +2,7 @@
 #SBATCH --job-name=pytorch_ddp       # Job name
 #SBATCH -p gk
 #SBATCH --nodes=2                    # Number of nodes
-#SBATCH --ntasks-per-node=1          # How many tasks on each node
+#SBATCH --ntasks-per-node=4          # How many tasks on each node
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
 #SBATCH --time=01:00:00              # Time limit hrs:min:sec
 #SBATCH --output=ddp_%j.log          # Standard output and error log
@@ -31,4 +31,4 @@ srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
             --rdzv_id=$SLURM_JOB_ID \
             --rdzv_backend=c10d \
             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
-            main.py --submit --distributed
+            main.py --submit --distributed --num-nodes 2 --num-gpus 4

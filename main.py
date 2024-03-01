@@ -107,6 +107,8 @@ def load_structures_from_json(
 
 def main(args):
     config = vars(args)
+    config['world_size'] = config['num_gpus'] * config['num_nodes']
+    
     if args.distributed:
         distutils.setup(config)
 
@@ -211,6 +213,15 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--submit", action="store_true", help="Submit job to cluster"
+    )
+    parser.add_argument(
+        "--num-gpus", default=1, type=int, help="Number of GPUs to request"
+    )
+    parser.add_argument(
+        "--num-nodes",
+        default=1,
+        type=int,
+        help="Number of Nodes to request",
     )
     parser.add_argument(
         "--seed",
