@@ -6,11 +6,16 @@
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
 #SBATCH --time=01:00:00              # Time limit hrs:min:sec
 #SBATCH --output=ddp_%j.log          # Standard output and error log
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=shuix007@umn.edu
 
 # Load any modules and activate your Python environment here
 
 # Clear any previously set PyTorch environment variables
 unset PYTHONPATH
+
+conda activate Torch2.1
+cd /home/karypisg/shuix007/FERMat/chgnet
 
 # Setup environment variables for distributed PyTorch
 export WORLD_SIZE=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
