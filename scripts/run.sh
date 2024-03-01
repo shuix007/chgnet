@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=pytorch_ddp       # Job name
 #SBATCH -p gk
-#SBATCH --nodes=2                    # Number of nodes
+#SBATCH --nodes=1                    # Number of nodes
 #SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=4          # How many tasks on each node
 #SBATCH --gpus-per-task=1
@@ -37,8 +37,18 @@ echo $SLURM_JOB_ID
 # If using PyTorch 1.9 or newer, you can also use torchrun (which replaces torch.distributed.launch)
 # srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
 #             --nnodes=$SLURM_NNODES \
+#             --max-restarts=1 \
 #             --rdzv_id=$SLURM_JOB_ID \
 #             --rdzv_backend=c10d \
 #             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 #             main.py --submit --distributed --num-nodes 2 --num-gpus 4
-srun python main.py --submit --distributed --num-nodes 2 --num-gpus 4
+
+srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
+            --nnodes=$SLURM_NNODES \
+            --max-restarts=1 \
+            --standalone \
+            main.py --submit --distributed --num-nodes 2 --num-gpus 4
+            # --rdzv_id=$SLURM_JOB_ID \
+            # --rdzv_backend=c10d \
+            # --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
+            
