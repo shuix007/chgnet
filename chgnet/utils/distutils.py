@@ -77,6 +77,12 @@ def setup(config) -> None:
                     config["local_rank"] = int(
                         os_environ_get_or_throw("SLURM_LOCALID")
                     )
+                    # config["rank"] = int(
+                    #     os_environ_get_or_throw("RANK")
+                    # )
+                    # config["local_rank"] = int(
+                    #     os_environ_get_or_throw("LOCAL_RANK")
+                    # )
                     print("2", os_environ_get_or_throw("SLURM_PROCID"), os_environ_get_or_throw("SLURM_LOCALID"))
 
 
