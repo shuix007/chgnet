@@ -19,7 +19,10 @@ conda activate Torch2.1
 cd /home/karypisg/shuix007/FERMat/chgnet
 
 # Setup environment variables for distributed PyTorch
-export WORLD_SIZE=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
+# export WORLD_SIZE=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
+export OMP_NUM_THREADS=8
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+
 # export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 # export MASTER_PORT=13356
 
@@ -29,7 +32,7 @@ export WORLD_SIZE=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
 # echo $MASTER_ADDR:$MASTER_PORT
 echo $SLURM_NTASKS_PER_NODE
 echo $SLURM_NNODES
-echo $WORLD_SIZE
+# echo $WORLD_SIZE
 echo $SLURM_JOB_ID
 
 
