@@ -3,7 +3,7 @@
 #SBATCH -p gk
 #SBATCH --nodes=1                    # Number of nodes
 #SBATCH --cpus-per-task=5
-#SBATCH --ntasks-per-node=4          # How many tasks on each node
+#SBATCH --ntasks-per-node=1          # How many tasks on each node
 #SBATCH --gpus-per-task=1
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
 #SBATCH --time=01:00:00              # Time limit hrs:min:sec
@@ -43,7 +43,7 @@ echo $SLURM_JOB_ID
 #             --rdzv_endpoint=$MASTER_ADDR:$MASTER_PORT \
 #             main.py --submit --distributed --num-nodes 2 --num-gpus 4
 
-srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
+srun torchrun --nproc_per_node=4 \
             --nnodes=$SLURM_NNODES \
             --max-restarts=0 \
             --standalone \
