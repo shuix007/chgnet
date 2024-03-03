@@ -94,6 +94,7 @@ def setup(config) -> None:
                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}, {config['local_rank']}"
                 )
                 print(os.environ['CUDA_VISIBLE_DEVICES'])
+                print("OS Local rank: {}".format(os.environ['LOCAL_RANK']))
                 print(config["local_rank"], config["rank"])
 
                 # ensures GPU0 does not have extra context/higher peak memory
