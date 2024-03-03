@@ -45,7 +45,7 @@ echo $SLURM_JOB_ID
 
 srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \
             --nnodes=$SLURM_NNODES \
-            --max-restarts=1 \
+            --max-restarts=0 \
             --standalone \
             main.py --submit --distributed --num-nodes 1 --num-gpus 4
             # --rdzv_id=$SLURM_JOB_ID \
