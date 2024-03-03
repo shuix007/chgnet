@@ -30,11 +30,10 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 # srun python -m torch.distributed.launch --nproc_per_node=$SLURM_NTASKS_PER_NODE --nnodes=$SLURM_NNODES --node_rank=$SLURM_PROCID --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT your_training_script.py
 
 # echo $MASTER_ADDR:$MASTER_PORT
-echo $SLURM_NTASKS_PER_NODE
-echo $SLURM_NNODES
+# echo $SLURM_NTASKS_PER_NODE
+# echo $SLURM_NNODES
 # echo $WORLD_SIZE
-echo $SLURM_JOB_ID
-
+# echo $SLURM_JOB_ID
 
 # If using PyTorch 1.9 or newer, you can also use torchrun (which replaces torch.distributed.launch)
 # srun torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE \

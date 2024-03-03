@@ -56,6 +56,13 @@ def setup(config) -> None:
                 dist.init_process_group(
                     backend=config["distributed_backend"]
                 )
+
+                if initialized() and is_master():
+                    print(
+                        "Initialized process group: {}/{}, world_size: {}.".format(
+                            config['master_addr'], config['master_port'], config['World_size']
+                        )
+                    )
             except subprocess.CalledProcessError as e:  # scontrol failed
                 raise e
             except FileNotFoundError:  # Slurm is not installed

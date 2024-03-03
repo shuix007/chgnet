@@ -15,6 +15,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data.distributed import DistributedSampler
 
 from chgnet import utils
+from chgnet.utils import distutils
 from chgnet.graph import CrystalGraph, CrystalGraphConverter
 
 if TYPE_CHECKING:
@@ -74,7 +75,8 @@ class StructureData(Dataset):
         self.structure_ids = structure_ids
         self.keys = np.arange(len(structures))
         random.shuffle(self.keys)
-        print(f"{len(structures)} structures imported")
+        if distutils.is_master():
+            print(f"{len(structures)} structures imported")
         self.graph_converter = graph_converter or CrystalGraphConverter(
             atom_graph_cutoff=6, bond_graph_cutoff=3
         )

@@ -20,6 +20,49 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+# def load_structures_from_json(
+#         json_filename='../FERMat/Data/MPtrj_2022.9_full.json',
+#         sample_filename='../FERMat/Data/SampledPretrain/MPtraj-semdedup/rseed0-0.10/colabfit_ids.txt'
+#     ):
+#     with open(json_filename, 'r') as f:
+#         data = json.load(f)
+    
+#     if sample_filename is not None:
+#         with open(sample_filename, 'r') as f:
+#             sample_ids = set(f.read().splitlines())
+    
+#     structures = []
+#     energies_per_atom = []
+#     forces = []
+#     stresses = []
+#     magmoms = []
+
+#     mp_ids = sorted(list(data.keys()))
+#     for mp_id in mp_ids:
+#         frame_ids = sorted(list(data[mp_id].keys())) # deterministic order
+#         for frame_id in frame_ids:
+#             if sample_filename is not None and frame_id not in sample_ids:
+#                 continue
+#             frame = data[mp_id][frame_id]
+            
+#             structures.append(Structure.from_dict(frame['structure']))
+#             energies_per_atom.append(frame['energy_per_atom'])
+#             forces.append(frame['force'])
+#             stresses.append(frame['stress'])
+#             magmoms.append(frame['magmom'])
+
+#     dataset = StructureData(
+#         structures=structures,
+#         energies=energies_per_atom,
+#         forces=forces,
+#         stresses=stresses,  # can be None
+#         magmoms=magmoms,  # can be None
+#     )
+#     train_loader, val_loader, test_loader = get_train_val_test_loader(
+#         dataset, batch_size=40, train_ratio=0.9, val_ratio=0.05
+#     )
+#     return train_loader, val_loader, test_loader
+
 def load_structures_from_json(
         json_filename='../FERMat/Data/MPtrj_2022.9_full.json',
         sample_filename='../FERMat/Data/SampledPretrain/MPtraj-semdedup/rseed0-0.10/colabfit_ids.txt'
@@ -50,51 +93,6 @@ def load_structures_from_json(
             forces.append(frame['force'])
             stresses.append(frame['stress'])
             magmoms.append(frame['magmom'])
-    print('Loaded', len(structures), 'structures')
-
-    dataset = StructureData(
-        structures=structures,
-        energies=energies_per_atom,
-        forces=forces,
-        stresses=stresses,  # can be None
-        magmoms=magmoms,  # can be None
-    )
-    train_loader, val_loader, test_loader = get_train_val_test_loader(
-        dataset, batch_size=40, train_ratio=0.9, val_ratio=0.05
-    )
-    return train_loader, val_loader, test_loader
-
-def load_structures_from_json(
-        json_filename='../FERMat/Data/MPtrj_2022.9_full.json',
-        sample_filename='../FERMat/Data/SampledPretrain/MPtraj-semdedup/rseed0-0.10/colabfit_ids.txt'
-    ):
-    with open(json_filename, 'r') as f:
-        data = json.load(f)
-    
-    if sample_filename is not None:
-        with open(sample_filename, 'r') as f:
-            sample_ids = set(f.read().splitlines())
-    
-    structures = []
-    energies_per_atom = []
-    forces = []
-    stresses = []
-    magmoms = []
-
-    mp_ids = sorted(list(data.keys()))
-    for mp_id in mp_ids:
-        frame_ids = sorted(list(data[mp_id].keys())) # deterministic order
-        for frame_id in frame_ids:
-            if sample_filename is not None and frame_id not in sample_ids:
-                continue
-            frame = data[mp_id][frame_id]
-            
-            structures.append(Structure.from_dict(frame['structure']))
-            energies_per_atom.append(frame['energy_per_atom'])
-            forces.append(frame['force'])
-            stresses.append(frame['stress'])
-            magmoms.append(frame['magmom'])
-    print('Loaded', len(structures), 'structures')
 
     dataset = StructureData(
         structures=structures,

@@ -22,7 +22,7 @@ from chgnet.model.layers import (
     GraphAttentionReadOut,
     GraphPooling,
 )
-from chgnet.utils import cuda_devices_sorted_by_free_mem
+from chgnet.utils import cuda_devices_sorted_by_free_mem, distutils
 
 if TYPE_CHECKING:
     from chgnet import PredTask
@@ -311,8 +311,9 @@ class CHGNet(nn.Module):
                 nn.Linear(in_features=mlp_hidden_dims[-1], out_features=1),
             )
 
-        version_str = f" v{version}" if version else ""
-        print(f"CHGNet{version_str} initialized with {self.n_params:,} parameters")
+        if distutils.initialized() and distutils.is_master():
+            version_str = f" v{version}" if version else ""
+            print(f"CHGNet{version_str} initialized with {self.n_params:,} parameters")
 
     @property
     def version(self) -> str | None:
