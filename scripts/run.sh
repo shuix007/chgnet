@@ -4,7 +4,6 @@
 #SBATCH --nodes=1                    # Number of nodes
 #SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
-#SBATCH --gpus-per-task=1
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
 #SBATCH --time=01:00:00              # Time limit hrs:min:sec
 #SBATCH --output=ddp_%j.log          # Standard output and error log
