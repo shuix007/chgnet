@@ -194,7 +194,7 @@ class Trainer:
         self.criterion = CombinedLoss(
             target_str=self.targets,
             criterion=criterion,
-            is_intensive=self.model.is_intensive,
+            is_intensive=self._unwrapped_model.is_intensive,
             energy_loss_ratio=energy_loss_ratio,
             force_loss_ratio=force_loss_ratio,
             stress_loss_ratio=stress_loss_ratio,
