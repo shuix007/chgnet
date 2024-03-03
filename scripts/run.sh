@@ -20,13 +20,13 @@ cd /home/karypisg/shuix007/FERMat/chgnet
 
 # Setup environment variables for distributed PyTorch
 export WORLD_SIZE=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
-export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
-export MASTER_PORT=13356
+# export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
+# export MASTER_PORT=13356
 
 # Run the PyTorch script using torch.distributed.launch or torchrun (for PyTorch >= 1.9)
 # srun python -m torch.distributed.launch --nproc_per_node=$SLURM_NTASKS_PER_NODE --nnodes=$SLURM_NNODES --node_rank=$SLURM_PROCID --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT your_training_script.py
 
-echo $MASTER_ADDR:$MASTER_PORT
+# echo $MASTER_ADDR:$MASTER_PORT
 echo $SLURM_NTASKS_PER_NODE
 echo $SLURM_NNODES
 echo $WORLD_SIZE
