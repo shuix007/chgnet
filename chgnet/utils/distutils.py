@@ -37,7 +37,6 @@ def os_environ_get_or_throw(x: str) -> str:
         raise RuntimeError(f"Could not find {x} in ENV variables")
     return none_throws(os.environ.get(x))
 
-
 def setup(config) -> None:
     if config["submit"]:
         node_list = os.environ.get("SLURM_STEP_NODELIST")
@@ -46,66 +45,17 @@ def setup(config) -> None:
         print("0", os.environ.get("SLURM_JOB_NODELIST"), os.environ.get("SLURM_STEP_NODELIST"))
         if node_list is not None:
             try:
-                hostnames = subprocess.check_output(
-                    ["scontrol", "show", "hostnames", node_list]
-                )
-                config["init_method"] = "tcp://{host}:{port}".format(
-                    host=hostnames.split()[0].decode("utf-8"),
-                    port=config["distributed_port"],
-                )
-                nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
-                ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
-                print("1", os_environ_get_or_throw("SLURM_NNODES"), os.environ.get("SLURM_NTASKS_PER_NODE"))
-                if ntasks_per_node is not None:
-                    ntasks_per_node = int(ntasks_per_node)
-                else:
-                    ntasks = int(os_environ_get_or_throw("SLURM_NTASKS"))
-                    nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
-                    assert ntasks % nnodes == 0
-                    ntasks_per_node = int(ntasks / nnodes)
-                if ntasks_per_node == 1:
-                    assert config["world_size"] % nnodes == 0
-                    gpus_per_node = config["world_size"] // nnodes
-                    node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
-                    config["rank"] = node_id * gpus_per_node
-                    config["local_rank"] = 0
-                else:
-                    assert ntasks_per_node == config["world_size"] // nnodes
-                    config["rank"] = int(
-                        os_environ_get_or_throw("SLURM_PROCID")
-                    )
-                    config["local_rank"] = int(
-                        os_environ_get_or_throw("SLURM_LOCALID")
-                    )
-                    # config["rank"] = int(
-                    #     os_environ_get_or_throw("RANK")
-                    # )
-                    # config["local_rank"] = int(
-                    #     os_environ_get_or_throw("LOCAL_RANK")
-                    # )
-                    print("2", os_environ_get_or_throw("SLURM_PROCID"), os_environ_get_or_throw("SLURM_LOCALID"))
-
-
-                logging.info(
-                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
-                )
-
-                print(
-                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}, {config['local_rank']}"
-                )
-                print(os.environ['CUDA_VISIBLE_DEVICES'])
-                print("OS Local rank: {}".format(os.environ['LOCAL_RANK']))
-                print(config["local_rank"], config["rank"])
+                config['local_rank'] = int(os.environ['LOCAL_RANK'])
+                config['rank'] = int(os.environ['RANK'])
+                config['World_size'] = int(os.environ['WORLD_SIZE'])
+                config['master_addr'] = os.environ['MASTER_ADDR']
+                config['master_port'] = os.environ['MASTER_PORT']
+                # print the above 5 lines
+                print(config['local_rank'], config['rank'], config['World_size'], config['master_addr'], config['master_port'])
 
                 # ensures GPU0 does not have extra context/higher peak memory
                 torch.cuda.set_device(config["local_rank"])
 
-                # dist.init_process_group(
-                #     backend=config["distributed_backend"],
-                #     init_method=config["init_method"],
-                #     world_size=config["world_size"],
-                #     rank=config["rank"],
-                # )
                 dist.init_process_group(
                     backend=config["distributed_backend"]
                 )
@@ -113,30 +63,106 @@ def setup(config) -> None:
                 raise e
             except FileNotFoundError:  # Slurm is not installed
                 pass
-    elif config["summit"]:
-        world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
-        world_rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
-        get_master = (
-            "echo $(cat {} | sort | uniq | grep -v batch | grep -v login | head -1)"
-        ).format(os.environ["LSB_DJOB_HOSTFILE"])
-        os.environ["MASTER_ADDR"] = str(
-            subprocess.check_output(get_master, shell=True)
-        )[2:-3]
-        os.environ["MASTER_PORT"] = "23456"
-        os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
-        os.environ["RANK"] = os.environ["OMPI_COMM_WORLD_RANK"]
-        # NCCL and MPI initialization
-        dist.init_process_group(
-            backend="nccl",
-            rank=world_rank,
-            world_size=world_size,
-            init_method="env://",
-        )
-    else:
-        dist.init_process_group(
-            backend=config["distributed_backend"], init_method="env://"
-        )
-    # TODO: SLURM
+
+# def setup(config) -> None:
+#     if config["submit"]:
+#         node_list = os.environ.get("SLURM_STEP_NODELIST")
+#         if node_list is None:
+#             node_list = os.environ.get("SLURM_JOB_NODELIST")
+#         print("0", os.environ.get("SLURM_JOB_NODELIST"), os.environ.get("SLURM_STEP_NODELIST"))
+#         if node_list is not None:
+#             try:
+#                 hostnames = subprocess.check_output(
+#                     ["scontrol", "show", "hostnames", node_list]
+#                 )
+#                 config["init_method"] = "tcp://{host}:{port}".format(
+#                     host=hostnames.split()[0].decode("utf-8"),
+#                     port=config["distributed_port"],
+#                 )
+#                 nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
+#                 ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
+#                 print("1", os_environ_get_or_throw("SLURM_NNODES"), os.environ.get("SLURM_NTASKS_PER_NODE"))
+#                 if ntasks_per_node is not None:
+#                     ntasks_per_node = int(ntasks_per_node)
+#                 else:
+#                     ntasks = int(os_environ_get_or_throw("SLURM_NTASKS"))
+#                     nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
+#                     assert ntasks % nnodes == 0
+#                     ntasks_per_node = int(ntasks / nnodes)
+#                 if ntasks_per_node == 1:
+#                     assert config["world_size"] % nnodes == 0
+#                     gpus_per_node = config["world_size"] // nnodes
+#                     node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
+#                     config["rank"] = node_id * gpus_per_node
+#                     config["local_rank"] = 0
+#                 else:
+#                     assert ntasks_per_node == config["world_size"] // nnodes
+#                     config["rank"] = int(
+#                         os_environ_get_or_throw("SLURM_PROCID")
+#                     )
+#                     config["local_rank"] = int(
+#                         os_environ_get_or_throw("SLURM_LOCALID")
+#                     )
+#                     # config["rank"] = int(
+#                     #     os_environ_get_or_throw("RANK")
+#                     # )
+#                     # config["local_rank"] = int(
+#                     #     os_environ_get_or_throw("LOCAL_RANK")
+#                     # )
+#                     print("2", os_environ_get_or_throw("SLURM_PROCID"), os_environ_get_or_throw("SLURM_LOCALID"))
+
+
+#                 logging.info(
+#                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
+#                 )
+
+#                 print(
+#                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}, {config['local_rank']}"
+#                 )
+#                 print(os.environ['CUDA_VISIBLE_DEVICES'])
+#                 print("OS Local rank: {}".format(os.environ['LOCAL_RANK']))
+#                 print(config["local_rank"], config["rank"])
+
+#                 # ensures GPU0 does not have extra context/higher peak memory
+#                 torch.cuda.set_device(config["local_rank"])
+
+#                 # dist.init_process_group(
+#                 #     backend=config["distributed_backend"],
+#                 #     init_method=config["init_method"],
+#                 #     world_size=config["world_size"],
+#                 #     rank=config["rank"],
+#                 # )
+#                 dist.init_process_group(
+#                     backend=config["distributed_backend"]
+#                 )
+#             except subprocess.CalledProcessError as e:  # scontrol failed
+#                 raise e
+#             except FileNotFoundError:  # Slurm is not installed
+#                 pass
+#     elif config["summit"]:
+#         world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
+#         world_rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
+#         get_master = (
+#             "echo $(cat {} | sort | uniq | grep -v batch | grep -v login | head -1)"
+#         ).format(os.environ["LSB_DJOB_HOSTFILE"])
+#         os.environ["MASTER_ADDR"] = str(
+#             subprocess.check_output(get_master, shell=True)
+#         )[2:-3]
+#         os.environ["MASTER_PORT"] = "23456"
+#         os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
+#         os.environ["RANK"] = os.environ["OMPI_COMM_WORLD_RANK"]
+#         # NCCL and MPI initialization
+#         dist.init_process_group(
+#             backend="nccl",
+#             rank=world_rank,
+#             world_size=world_size,
+#             init_method="env://",
+#         )
+#     else:
+#         dist.init_process_group(
+#             backend=config["distributed_backend"], init_method="env://"
+#         )
+#     # TODO: SLURM
 
 
 def cleanup() -> None:
