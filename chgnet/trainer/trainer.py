@@ -850,13 +850,14 @@ class CombinedLoss(nn.Module):
                 out["m_MAE"] = mae(mag_targets, mag_preds) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
             else:
-                mag_preds = torch.cat(mag_preds, dim=0)
+                mag_preds = torch.cat(
+                    [mag_pred for mag_pred in prediction["m"]], dim=0)
                 mag_targets = mag_preds.detach()
                 out["loss"] += self.mag_loss_ratio * self.criterion(
                     mag_targets, mag_preds
                 )
                 out["m_MAE"] = torch.tensor(0., device=prediction["e"].device) # torch.tensor([1], device=prediction["e"].device) * m_mae_size
-                out["m_MAE_size"] = m_mae_size
+                out["m_MAE_size"] = 1
         
         for key in out:
             if key not in ["loss"]:
