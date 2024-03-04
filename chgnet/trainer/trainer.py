@@ -850,6 +850,7 @@ class CombinedLoss(nn.Module):
                 out["m_MAE"] = mae(mag_targets, mag_preds) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
             else:
+                mag_preds = torch.cat(mag_preds, dim=0)
                 mag_targets = mag_preds.detach()
                 out["loss"] += self.mag_loss_ratio * self.criterion(
                     mag_targets, mag_preds
