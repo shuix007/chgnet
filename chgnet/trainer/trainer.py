@@ -118,7 +118,8 @@ class Trainer:
 
         if distutils.initialized():
             self.model = DistributedDataParallel(
-                self.model, device_ids=[self.device]
+                self.model, device_ids=[self.device],
+                find_unused_parameters=True
             )
         self.targets = targets
         # if torch_seed is not None:
