@@ -855,9 +855,13 @@ class CombinedLoss(nn.Module):
         
         for key in out:
             if key not in ["loss"]:
-                out[key] = distutils.all_reduce(
-                    out[key], average=False, device=prediction["e"].device
-                )
+                try:
+                    out[key] = distutils.all_reduce(
+                        out[key], average=False, device=prediction["e"].device
+                    )
+                except:
+                    print("Reduce error.", key, out[key])
+                    raise
         
         for key in targets:
             if key != 'c':
