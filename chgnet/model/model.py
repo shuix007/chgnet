@@ -265,8 +265,8 @@ class CHGNet(nn.Module):
                     gMLP_norm=gMLP_norm,
                     resnet=True,
                 )
-                for _ in range(n_conv - 1)
-            ]
+                for _ in range(n_conv - 2)
+            ] + [None]
             self.angle_layers = nn.ModuleList(angle_layers)
         else:
             self.angle_layers = [None for _ in range(n_conv - 1)]
