@@ -118,8 +118,7 @@ class Trainer:
 
         if distutils.initialized():
             self.model = DistributedDataParallel(
-                self.model, device_ids=[self.device],
-                find_unused_parameters=True
+                self.model, device_ids=[self.device]
             )
         self.targets = targets
         # if torch_seed is not None:
@@ -845,6 +844,9 @@ class CombinedLoss(nn.Module):
             if mag_targets != []:
                 mag_preds = torch.cat(mag_preds, dim=0)
                 mag_targets = torch.cat(mag_targets, dim=0)
+                if mag_targets.numel() == 0:
+                    mag_targets = mag_preds.detach()
+
                 out["loss"] += self.mag_loss_ratio * self.criterion(
                     mag_targets, mag_preds
                 )
