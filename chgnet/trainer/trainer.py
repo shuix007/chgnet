@@ -850,7 +850,7 @@ class CombinedLoss(nn.Module):
                 out["m_MAE"] = mae(mag_targets, mag_preds) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
             else:
-                out["m_MAE"] = torch.zeros([1]) * m_mae_size
+                out["m_MAE"] = torch.zeros([1], device=prediction["e"].device) * m_mae_size
                 out["m_MAE_size"] = m_mae_size
         
         for key in out:
