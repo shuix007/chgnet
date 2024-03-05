@@ -6,7 +6,7 @@ import random
 import shutil
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
 import torch
@@ -305,6 +305,19 @@ class Trainer:
         else:
             self.test_loader = None
 
+    @staticmethod
+    def _get_timestamp(device: torch.device, suffix: Optional[str]) -> str:
+        now = datetime.datetime.now().timestamp()
+        timestamp_tensor = torch.tensor(now).to(device)
+        # create directories from master rank only
+        distutils.broadcast(timestamp_tensor, 0)
+        timestamp_str = datetime.datetime.fromtimestamp(
+            timestamp_tensor.float().item()
+        ).strftime("%Y-%m-%d-%H-%M-%S")
+        if suffix:
+            timestamp_str += "-" + suffix
+        return timestamp_str
+
     def train(
         self,
         train_loader: DataLoader | None = None,
@@ -335,8 +348,9 @@ class Trainer:
         if self.model is None:
             raise ValueError("Model needs to be initialized")
         global best_checkpoint  # noqa: PLW0603
-        if save_dir is None:
-            save_dir = f"{datetime.now():%Y-%m-%d-%H-%m-%S}"
+        # if save_dir is None:
+        #     save_dir = f"{datetime.now():%Y-%m-%d-%H-%m-%S}"
+        save_dir = self._get_timestamp(self.device, suffix=save_dir)
         if distutils.is_master():
             os.makedirs(save_dir, exist_ok=True)
             print(f"training targets: {self.targets}")
