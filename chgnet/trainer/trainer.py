@@ -283,6 +283,7 @@ class Trainer:
             sampler=self.train_sampler,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            drop_last=True
         )
         self.val_loader = DataLoader(
             self.val_dataset,
@@ -371,6 +372,7 @@ class Trainer:
             if distutils.is_master():
                 self.save_checkpoint(epoch, val_mae, save_dir=save_dir)
 
+        distutils.synchronize()
         if self.test_loader is not None:
             # test best model
             if distutils.is_master():
@@ -380,7 +382,7 @@ class Trainer:
                     test_file = file
                     best_checkpoint = torch.load(os.path.join(save_dir, test_file))
 
-            self.model.load_state_dict(best_checkpoint["model"]["state_dict"])
+            self._unwrapped_model.load_state_dict(best_checkpoint["model"]["state_dict"])
             if save_test_result:
                 test_mae = self._validate(
                     self.test_loader, is_test=True, test_result_save_path=save_dir
