@@ -153,6 +153,7 @@ def main(args):
         force_loss_ratio=1,
         stress_loss_ratio=0.1,
         mag_loss_ratio=0.1,
+        contrastive_loss_ratio=1.,
         optimizer='Adam',
         weight_decay=0,
         scheduler='CosLR',
@@ -160,7 +161,7 @@ def main(args):
         criterion='Huber',
         delta=0.1,
         local_rank=local_rank,
-        epochs=5,
+        epochs=2,
         starting_epoch=0,
         learning_rate=5e-3,
         use_device='cuda',
@@ -172,7 +173,8 @@ def main(args):
         train_ratio=0.9, 
         val_ratio=0.05,
         pin_memory=False,
-        seed=args.seed
+        seed=args.seed,
+        num_workers=0
     )
     trainer.train()
 

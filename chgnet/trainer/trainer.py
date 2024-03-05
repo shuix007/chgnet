@@ -335,9 +335,9 @@ class Trainer:
         if self.model is None:
             raise ValueError("Model needs to be initialized")
         global best_checkpoint  # noqa: PLW0603
+        if save_dir is None:
+            save_dir = f"{datetime.now():%Y-%m-%d-%H-%m-%S}"
         if distutils.is_master():
-            if save_dir is None:
-                save_dir = f"{datetime.now():%Y-%m-%d-%H-%m-%S}"
             os.makedirs(save_dir, exist_ok=True)
             print(f"training targets: {self.targets}")
         print(f"Begin Training: using {self.device} device")

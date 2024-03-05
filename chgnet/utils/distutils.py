@@ -59,8 +59,9 @@ def setup(config) -> None:
 
                 if initialized() and is_master():
                     print(
-                        "Initialized process group: {}/{}, world_size: {}.".format(
-                            config['master_addr'], config['master_port'], config['World_size']
+                        "Initialized process group: {}/{}, backend: {}, world_size: {}.".format(
+                            config['master_addr'], config['master_port'], 
+                            config["distributed_backend"], config['World_size']
                         )
                     )
             except subprocess.CalledProcessError as e:  # scontrol failed
