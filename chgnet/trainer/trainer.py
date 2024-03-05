@@ -307,11 +307,11 @@ class Trainer:
 
     @staticmethod
     def _get_timestamp(device: torch.device, suffix: Optional[str]) -> str:
-        now = datetime.datetime.now().timestamp()
+        now = datetime.now().timestamp()
         timestamp_tensor = torch.tensor(now).to(device)
         # create directories from master rank only
         distutils.broadcast(timestamp_tensor, 0)
-        timestamp_str = datetime.datetime.fromtimestamp(
+        timestamp_str = datetime.fromtimestamp(
             timestamp_tensor.float().item()
         ).strftime("%Y-%m-%d-%H-%M-%S")
         if suffix:
