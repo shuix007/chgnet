@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
-#SBATCH --time=24:00:00              # Time limit hrs:min:sec
+#SBATCH --time=8:00:00              # Time limit hrs:min:sec
 #SBATCH --output=ddp_%j.log          # Standard output and error log
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=shuix007@umn.edu
