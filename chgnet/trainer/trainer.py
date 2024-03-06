@@ -367,10 +367,9 @@ class Trainer:
             self.train_sampler.set_epoch(epoch)
             # train
             train_mae = self._train(self.train_loader, epoch)
-            if "e" in train_mae and train_mae["e"] != train_mae["e"]:
-                if distutils.is_master():
-                    print("Exit due to NaN")
-                break
+            # if "e" in train_mae and train_mae["e"] != train_mae["e"]:
+            #     if distutils.is_master():
+            #         raise RuntimeError("Exit due to train MAE NaN")
 
             # val
             val_mae = self._validate(self.val_loader)
@@ -378,10 +377,9 @@ class Trainer:
                 self.training_history[key]["train"].append(train_mae[key])
                 self.training_history[key]["val"].append(val_mae[key])
 
-            if "e" in val_mae and val_mae["e"] != val_mae["e"]:
-                if distutils.is_master():
-                    print("Exit due to NaN")
-                break
+            # if "e" in val_mae and val_mae["e"] != val_mae["e"]:
+            #     if distutils.is_master():
+            #         raise RuntimeError("Exit due to val MAE NaN")
             
             if distutils.is_master():
                 self.save_checkpoint(epoch, val_mae, save_dir=save_dir)

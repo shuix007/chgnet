@@ -126,7 +126,7 @@ def main(args):
     )
     trainer.load_datasets(
         dataset,
-        batch_size=40, 
+        batch_size=20, 
         train_ratio=0.9, 
         val_ratio=0.05,
         pin_memory=False,
