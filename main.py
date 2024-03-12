@@ -8,7 +8,7 @@ import numpy as np
 from pymatgen.core import Structure
 from chgnet.trainer import Trainer
 from chgnet.model import CHGNet
-from chgnet.data.dataset import StructureData
+from chgnet.data.dataset import StructureData, GraphData
 from chgnet.utils import distutils
 
 def set_seed(seed):
@@ -60,6 +60,15 @@ def load_structures_from_json(
     )
     return dataset
 
+def load_graph_data(
+        graph_path = 'data/graphs/sampled_2022.9_full',
+        labels = "labels.json"     
+    ):
+    return GraphData(
+        graph_path=graph_path,
+        labels=labels
+    )
+
 def main(args):
     config = vars(args)
     config['world_size'] = config['num_gpus'] * config['num_nodes']
@@ -73,6 +82,7 @@ def main(args):
         json_filename=args.json_filename,
         sample_filename=args.sample_filename
     )
+    # dataset =load_graph_data()
 
     model = CHGNet(
         atom_fea_dim=64,
@@ -122,13 +132,22 @@ def main(args):
         starting_epoch=0,
         learning_rate=5e-3,
         use_device='cuda',
-        print_freq=500
+        print_freq=10
     )
-    trainer.load_datasets(
-        dataset,
+    # trainer.load_datasets(
+    #     dataset,
+    #     batch_size=20, 
+    #     train_ratio=0.9, 
+    #     val_ratio=0.05,
+    #     pin_memory=False,
+    #     seed=args.seed,
+    #     num_workers=0
+    # )
+    trainer.load_lmdb_datasets(
+        train_src='data/LMDB-MPtraj/train',
+        val_src='data/LMDB-MPtraj/val',
+        test_src='data/LMDB-MPtraj/test',
         batch_size=20, 
-        train_ratio=0.9, 
-        val_ratio=0.05,
         pin_memory=False,
         seed=args.seed,
         num_workers=0

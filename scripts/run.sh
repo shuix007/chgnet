@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=pytorch_ddp       # Job name
 #SBATCH -p gk
-#SBATCH --nodes=6                    # Number of nodes
+#SBATCH --nodes=1                    # Number of nodes
 #SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
 #SBATCH --gres=gpu:4                 # Number of GPUs per node
-#SBATCH --time=8:00:00              # Time limit hrs:min:sec
+#SBATCH --time=48:00:00              # Time limit hrs:min:sec
 #SBATCH --output=ddp_%j.log          # Standard output and error log
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=shuix007@umn.edu

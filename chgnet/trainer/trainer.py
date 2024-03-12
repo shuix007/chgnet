@@ -23,6 +23,7 @@ from torch.nn.parallel.distributed import DistributedDataParallel
 
 from chgnet.model.model import CHGNet
 from chgnet.data.dataset import collate_graphs
+from chgnet.data.lmdb_dataset import collate_graphs, LmdbDataset
 from chgnet.utils import AverageMeter, cuda_devices_sorted_by_free_mem, mae, write_json, distutils
 
 if TYPE_CHECKING:
@@ -304,6 +305,83 @@ class Trainer:
             )
         else:
             self.test_loader = None
+    
+    def load_lmdb_datasets(
+        self, 
+        train_src: str,
+        val_src: str = None,
+        test_src: str = None,
+        batch_size: int = 64,
+        num_workers: int = 0,
+        pin_memory: bool = True,
+        seed: int = 0
+    ):
+        """Randomly partition a dataset into train, val, test loaders.
+
+        Args:
+            dataset (Dataset): The dataset to partition.
+            batch_size (int): The batch size for the data loaders
+                Default = 64
+            train_ratio (float): The ratio of the dataset to use for training
+                Default = 0.8
+            val_ratio (float): The ratio of the dataset to use for validation
+                Default: 0.1
+            return_test (bool): Whether to return a test data loader
+                Default = True
+            num_workers (int): The number of worker processes for loading the data
+                see torch Dataloader documentation for more info
+                Default = 0
+            pin_memory (bool): Whether to pin the memory of the data loaders
+                Default: True
+            seed (int): Random seed for sampler
+                Default = 0
+
+        Returns:
+            train_loader, val_loader and optionally test_loader
+        """
+        num_replicas = distutils.get_world_size()
+        rank = distutils.get_rank()
+
+        self.train_dataset = LmdbDataset({'src': train_src})
+        self.train_sampler = DistributedSampler(
+            self.train_dataset, shuffle=True, seed=seed, drop_last=True, num_replicas=num_replicas, rank=rank)
+        self.train_loader = DataLoader(
+            self.train_dataset,
+            batch_size=batch_size,
+            collate_fn=collate_graphs,
+            sampler=self.train_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=True
+        )
+
+        self.val_loader = None
+        if val_src is not None:
+            self.val_dataset = LmdbDataset({'src': val_src})
+            self.val_sampler = DistributedSampler(
+                self.val_dataset, shuffle=False, num_replicas=num_replicas, rank=rank)
+            self.val_loader = DataLoader(
+                self.val_dataset,
+                batch_size=batch_size,
+                collate_fn=collate_graphs,
+                sampler=self.val_sampler,
+                num_workers=num_workers,
+                pin_memory=pin_memory,
+            )
+
+        self.test_loader = None
+        if test_src is not None:
+            self.test_dataset = LmdbDataset({'src': test_src})
+            self.test_sampler = DistributedSampler(
+                self.test_dataset, shuffle=False, num_replicas=num_replicas, rank=rank)
+            self.test_loader = DataLoader(
+                self.test_dataset,
+                batch_size=batch_size,
+                collate_fn=collate_graphs,
+                sampler=self.test_sampler,
+                num_workers=num_workers,
+                pin_memory=pin_memory,
+            )
 
     @staticmethod
     def _get_timestamp(device: torch.device, suffix: Optional[str]) -> str:

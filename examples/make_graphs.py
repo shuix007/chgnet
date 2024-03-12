@@ -6,6 +6,8 @@ import random
 import torch
 from pymatgen.core.structure import Structure
 
+from tqdm import tqdm
+
 from chgnet import utils
 from chgnet.data.dataset import StructureData, StructureJsonData
 from chgnet.graph import CrystalGraphConverter
@@ -40,7 +42,7 @@ def make_graphs(
     failed_graphs = []
     print(f"{len(data.keys)} graphs to make")
 
-    for idx, (mp_id, graph_id) in enumerate(data.keys):
+    for idx, (mp_id, graph_id) in enumerate(tqdm(data.keys)):
         dic = make_one_graph(mp_id, graph_id, data, graph_dir)
         if dic is not False:  # graph made successfully
             if mp_id not in labels:
@@ -49,8 +51,8 @@ def make_graphs(
                 labels[mp_id][graph_id] = dic
         else:
             failed_graphs += [(mp_id, graph_id)]
-        if idx % 1000 == 0:
-            print(idx)
+        # if idx % 1000 == 0:
+        #     print(idx)
 
     utils.write_json(labels, os.path.join(graph_dir, "labels.json"))
     utils.write_json(failed_graphs, os.path.join(graph_dir, "failed_graphs.json"))
@@ -95,9 +97,9 @@ def make_partition(
 
 
 if __name__ == "__main__":
-    data_path = ""
-    graph_dir = ""
+    data_path = "../data/sampled_MPtrj_2022.9_full.json"
+    graph_dir = "../data/graphs/sampled_2022.9_full/"
 
-    converter = CrystalGraphConverter(atom_graph_cutoff=5, bond_graph_cutoff=3)
+    converter = CrystalGraphConverter(atom_graph_cutoff=6, bond_graph_cutoff=3)
     data = StructureJsonData(data_path, graph_converter=converter)
     make_graphs(data, graph_dir)
