@@ -78,10 +78,10 @@ def main(args):
 
     set_seed(args.seed)
     local_rank = args.local_rank
-    dataset = load_structures_from_json(
-        json_filename=args.json_filename,
-        sample_filename=args.sample_filename
-    )
+    # dataset = load_structures_from_json(
+    #     json_filename=args.json_filename,
+    #     sample_filename=args.sample_filename
+    # )
     # dataset =load_graph_data()
 
     model = CHGNet(
@@ -132,7 +132,7 @@ def main(args):
         starting_epoch=0,
         learning_rate=5e-3,
         use_device='cuda',
-        print_freq=10
+        print_freq=1000
     )
     # trainer.load_datasets(
     #     dataset,
