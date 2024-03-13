@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=pytorch_ddp       # Job name
 #SBATCH -p gk
-#SBATCH --nodes=1                    # Number of nodes
+#SBATCH --nodes=2                    # Number of nodes
 #SBATCH --cpus-per-task=5
 #SBATCH --ntasks-per-node=1          # How many tasks on each node
 #SBATCH --gres=gpu:4                 # Number of GPUs per node

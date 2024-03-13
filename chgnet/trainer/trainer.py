@@ -441,6 +441,7 @@ class Trainer:
         for param in self._unwrapped_model.composition_model.parameters():
             param.requires_grad = train_composition_model
 
+        val_mae = self._validate(self.val_loader) # debug
         for epoch in range(self.starting_epoch, self.epochs):
             self.train_sampler.set_epoch(epoch)
             # train
@@ -619,6 +620,10 @@ class Trainer:
                 combined_loss = self.criterion(targets, prediction)
 
             losses.update(combined_loss["loss"].data.cpu().item(), len(graphs))
+            
+            combined_loss["loss"].backward() # release the cached activations
+            self.optimizer.zero_grad()
+
             for key in self.targets:
                 mae_errors[key].update(
                     combined_loss[f"{key}_MAE"].cpu().item(),

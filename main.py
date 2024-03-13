@@ -97,8 +97,8 @@ def main(args):
         bond_conv_hidden_dim=64,
         update_angle=True,
         angle_layer_hidden_dim=0,
-        conv_dropout=0.1,
-        mlp_dropout=0.1,
+        conv_dropout=0.,
+        mlp_dropout=0.,
         read_out="ave",
         gMLP_norm='layer',
         readout_norm='layer',
@@ -115,7 +115,7 @@ def main(args):
     
     trainer = Trainer(
         model=model,
-        targets='efsmc',
+        targets='efsm',
         energy_loss_ratio=1,
         force_loss_ratio=1,
         stress_loss_ratio=0.1,
@@ -132,7 +132,7 @@ def main(args):
         starting_epoch=0,
         learning_rate=5e-3,
         use_device='cuda',
-        print_freq=1000
+        print_freq=100
     )
     # trainer.load_datasets(
     #     dataset,
@@ -150,7 +150,7 @@ def main(args):
         batch_size=20, 
         pin_memory=False,
         seed=args.seed,
-        num_workers=0
+        num_workers=1
     )
     trainer.train(save_dir=args.identifier)
 
