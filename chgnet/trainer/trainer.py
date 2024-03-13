@@ -988,7 +988,7 @@ class CombinedLoss(nn.Module):
             contrastive_loss = self.contrastive_criterion(sim_matrix, labels)
 
             out["loss"] += self.contrastive_loss_ratio * contrastive_loss
-            out["c_MAE"] = contrastive_loss * sim_matrix.shape[0]
+            out["c_MAE"] = contrastive_loss
             out["c_MAE_size"] = sim_matrix.shape[0]
 
         return out
